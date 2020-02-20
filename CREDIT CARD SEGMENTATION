@@ -1,0 +1,156 @@
+rm(list=ls())
+setwd("D:/Data Science/R/data01s2l1")
+getwd()
+df= read.csv("credit-card-data.csv", header = T, sep = ",")
+df
+str(df)
+names(df)
+
+#since we do not want customer ID so I am dropping the column 'cust_ID'.
+
+df = df[,-1]           #dropping the column 'cust_ID'
+names(df)             #checking the Columns again 
+
+# Checking the missing values and other variables such as quartile, mean, median etc
+
+df_func = function(x){
+  nmiss = sum(is.na(x))
+  a = x[!is.na(x)]
+  n = length(a)
+  m = mean(a)
+  min = min(a)
+  max = max(a)
+  s = sd(a)
+  p1 = quantile(a, 0.95)
+  p2 = quantile(a, 0.99)
+  UL = m+3*s
+  LL = m-3*s
+  return(c(n=n, nmiss=nmiss, Mean=m, Min=min, Max=max, StDev=s, P1=p1, P2=p2, 'Upper Limit'=UL, 'Lower Limit'=LL))
+}
+
+vars  =  c("BALANCE","BALANCE_FREQUENCY","PURCHASES","ONEOFF_PURCHASES","INSTALLMENTS_PURCHASES",          
+          "CASH_ADVANCE","PURCHASES_FREQUENCY","ONEOFF_PURCHASES_FREQUENCY","PURCHASES_INSTALLMENTS_FREQUENCY",
+          "CASH_ADVANCE_FREQUENCY","CASH_ADVANCE_TRX","PURCHASES_TRX","CREDIT_LIMIT","PAYMENTS",
+          "MINIMUM_PAYMENTS","PRC_FULL_PAYMENT","TENURE")
+
+describe_stats  =  t(data.frame(apply(df[vars],2,df_func)))
+View(describe_stats)
+
+
+#From the above code, it can be clearly seen that there are missing values in CREDIT_LIMIT and MINIMUM_PAYMENTS 
+
+#Using the value of Upper limit we can proceed with the data analysis
+
+df$BALANCE[df$BALANCE > 7809.060]  =  7809.060
+
+df$PURCHASES[df$PURCHASES > 7413.090]  =  7413.090
+
+df$ONEOFF_PURCHASES[df$ONEOFF_PURCHASES > 5572.107]  =  5572.107
+
+df$INSTALLMENTS_PURCHASES[df$INSTALLMENTS_PURCHASES > 3124.082]  =  3124.082
+
+df$CASH_ADVANCE[df$CASH_ADVANCE > 7270.351]  =  7270.351
+
+df$CASH_ADVANCE_FREQUENCY[df$CASH_ADVANCE_FREQUENCY > 0.736]  =  0.736
+
+df$CASH_ADVANCE_TRX[df$CASH_ADVANCE_TRX > 23.723]  =  23.723
+
+df$PURCHASES_TRX[df$PURCHASES_TRX > 89.283]  =  89.283
+
+df$CREDIT_LIMIT[df$CREDIT_LIMIT > 15410.910]  =  15410.910
+
+df$PAYMENTS[df$PAYMENTS > 10418.320]  =  10418.320
+
+df$MINIMUM_PAYMENTS[df$MINIMUM_PAYMENTS > 7981.557]  =  7981.557
+
+View(df)
+
+
+#Missing value treatment
+
+df$CREDIT_LIMIT[is.na(df$CREDIT_LIMIT)]  =  4494.4
+df$MINIMUM_PAYMENTS[is.na(df$MINIMUM_PAYMENTS)]  =  864.20
+inputdata  =  df[vars]
+
+# Factor Analysis: Method to reduce the variables
+
+corr_df  =  cor(inputdata)    #cor compute the variance of x and the covariance or correlation of x and y if these are vectors
+View(corr_df)
+
+write.csv(corr_df, "Correlation_matrix.csv")
+
+eigen(corr_df)$values         #it becomes easy to understand linear transformations also we can represent a large set of information in a matrix
+
+
+library(psych)
+install.packages("psych")
+library(GPArotation)
+install.packages("GPArotation")
+
+View(df)
+
+parallel = fa.parallel(df, fm = 'minres', fa = 'fa') #Parallel analysis suggests that the number of factors =  6  (from the scree plot)
+
+#Feature Selection
+
+factor = fa(df,nfactors = 3,rotate = "oblimin",fm="fa")
+print(factor)
+
+#we need to consider the loadings more than 0.3 and not loading on more than one factor. Note that negative values are adfeptable here. So let’s first establish the cut off to improve visibility
+
+
+print(factor$loadings,cutoff = 0.3)    
+
+# Two variables have become insignificant and two other have double-loading. Next, we’ll  consider ‘4’ factors
+
+ffactor = fa(df,nfactors = 4,rotate = "oblimin",fm="fa")
+print(ffactor)
+
+print(ffactor$loadings,cutoff = 0.3)          # can see that it results in only single-loading. This is known as simple structure.
+
+fa.diagram(ffactor)
+
+ffactor_SORT = fa.sort(ffactor)      
+ffactor$loadings
+
+Loadings = data.frame(ffactor$loadings[1:ncol(inputdata),])
+View(Loadings)
+
+
+eigen_value = eigen(corr_df)$values
+eigen_value
+
+
+vars1  =  c("BALANCE","BALANCE_FREQUENCY","PURCHASES","ONEOFF_PURCHASES","PURCHASES_FREQUENCY",
+           "PURCHASES_INSTALLMENTS_FREQUENCY","CASH_ADVANCE_TRX","MINIMUM_PAYMENTS")
+inputdata1  =  df[vars1]
+inputdata1
+
+
+# standardizing the data
+
+inputdata_final = scale(inputdata1)
+View(inputdata_final)
+
+#clustering the data on the basis of K means
+
+Clus_3  =  kmeans(inputdata_final,3)
+Clus_4  =  kmeans(inputdata_final,4)
+Clus_5  =  kmeans(inputdata_final,5)
+Clus_6  =  kmeans(inputdata_final,6)
+
+table(Clus_3$cluster)
+table(Clus_4$cluster)
+table(Clus_5$cluster)
+table(Clus_6$cluster)
+
+
+df_new  =  cbind(df, Km_Clus_3 = Clus_3$cluster, Km_Clus_4 = Clus_4$cluster, Km_Clus_5 = Clus_5$cluster, Km_Clus_6 = Clus_6$cluster)
+df_new$Km_Clus_3  =  factor(df_new$Km_Clus_3)
+df_new$Km_Clus_4  =  factor(df_new$Km_Clus_4)
+df_new$Km_Clus_5  =  factor(df_new$Km_Clus_5)
+df_new$Km_Clus_6  =  factor(df_new$Km_Clus_6)
+
+View(df_new)
+
+write.csv(df_new,'Customer Segementation.csv')
